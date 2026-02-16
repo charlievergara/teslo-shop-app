@@ -19,8 +19,6 @@ export default function LoginPage() {
         event.preventDefault()
         setIsPosting(true)
 
-        console.log(event.target)
-
         const formData = new FormData(event.target as HTMLFormElement)
         const email = formData.get('email') as string
         const password = formData.get('password') as string

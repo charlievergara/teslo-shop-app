@@ -1,59 +1,90 @@
 import AdminTitle from '@/admin/components/AdminTitle'
 import { Button } from '@/components/ui/button'
-import type { Product } from '@/types/product.interface'
-// import type { Product } from '@/interfaces/product.interface';
+import type { Product, Size } from '@/types/product.interface'
 import { X, SaveAll, Tag, Plus, Upload } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { useForm } from 'react-hook-form'
+import { cn } from '@/lib/utils'
 
 interface Props {
     title: string
-    subTitle: string
+    subtitle: string
     product: Product
+    isPending: boolean
+    onSubmit: (
+        productLike: Partial<Product> & { files?: File[] }
+    ) => Promise<void>
 }
 
-const availableSizes = ['XS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXL']
+const availableSizes: Size[] = ['XS', 'S', 'M', 'L', 'XL', 'XXL']
 
-export const ProductForm = ({ title, subTitle, product }: Props) => {
-    console.log({ product })
+interface FormInputs extends Product {
+    files?: File[]
+}
 
-    const { register } = useForm({
+export const ProductForm = ({
+    title,
+    subtitle,
+    product,
+    onSubmit,
+    isPending = false,
+}: Props) => {
+    const [dragActive, setDragActive] = useState(false)
+
+    const inputRef = useRef<HTMLInputElement>(null)
+    const [files, setFiles] = useState<File[]>([])
+
+    useEffect(() => {
+        setFiles([])
+    }, [product])
+
+    const {
+        register,
+        handleSubmit,
+        formState: { errors },
+        getValues,
+        setValue,
+        watch,
+    } = useForm<FormInputs>({
         defaultValues: product,
     })
 
-    const [dragActive, setDragActive] = useState(false)
+    const selectedSizes = watch('sizes')
+    const activeTags = watch('tags')
+    const activeStock = watch('stock')
 
     const addTag = () => {
-        // if (newTag.trim() && !product.tags.includes(newTag.trim())) {
-        //     setProduct((prev) => ({
-        //       ...prev,
-        //       tags: [...prev.tags, newTag.trim()],
-        //     }));
-        // }
+        const newTag = inputRef.current!.value
+
+        if (newTag && newTag !== '') {
+            const tagsSet = new Set(getValues('tags'))
+            tagsSet.add(newTag)
+
+            setValue('tags', Array.from(tagsSet))
+            inputRef.current!.value = ''
+        }
     }
 
     const removeTag = (tagToRemove: string) => {
-        // setProduct((prev) => ({
-        //   ...prev,
-        //   tags: prev.tags.filter((tag) => tag !== tagToRemove),
-        // }));
+        const tagSet = new Set(getValues('tags'))
+        tagSet.delete(tagToRemove)
+
+        setValue('tags', Array.from(tagSet))
     }
 
-    const addSize = (size: string) => {
-        // if (!product.sizes.includes(size)) {
-        //   setProduct((prev) => ({
-        //     ...prev,
-        //     sizes: [...prev.sizes, size],
-        //   }));
-        // }
+    const addSize = (size: Size) => {
+        const sizeSet = new Set(getValues('sizes'))
+        sizeSet.add(size)
+
+        setValue('sizes', Array.from(sizeSet))
     }
 
-    const removeSize = (sizeToRemove: string) => {
-        // setProduct((prev) => ({
-        //   ...prev,
-        //   sizes: prev.sizes.filter((size) => size !== sizeToRemove),
-        // }));
+    const removeSize = (size: Size) => {
+        const sizeSet = new Set(getValues('sizes'))
+        sizeSet.delete(size)
+
+        setValue('sizes', Array.from(sizeSet))
     }
 
     const handleDrag = (e: React.DragEvent) => {
@@ -71,20 +102,31 @@ export const ProductForm = ({ title, subTitle, product }: Props) => {
         e.stopPropagation()
         setDragActive(false)
         const files = e.dataTransfer.files
-        console.log(files)
+        if (!files) return
+
+        setFiles((prev) => [...prev, ...Array.from(files)])
+
+        const currentFiles = getValues('files') || []
+        setValue('files', [...currentFiles, ...Array.from(files)])
     }
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files
-        console.log(files)
+
+        if (!files) return
+
+        setFiles((prev) => [...prev, ...Array.from(files)])
+
+        const currentFiles = getValues('files') || []
+        setValue('files', [...currentFiles, ...Array.from(files)])
     }
 
     return (
-        <>
+        <form onSubmit={handleSubmit(onSubmit)}>
             <div className="flex justify-between items-center">
-                <AdminTitle title={title} subtitle={subTitle} />
+                <AdminTitle title={title} subtitle={subtitle} />
                 <div className="flex justify-end mb-10 gap-4">
-                    <Button variant="outline">
+                    <Button variant="outline" type="button">
                         <Link
                             to="/admin/products"
                             className="flex items-center gap-2"
@@ -94,7 +136,7 @@ export const ProductForm = ({ title, subTitle, product }: Props) => {
                         </Link>
                     </Button>
 
-                    <Button>
+                    <Button type="submit" disabled={isPending}>
                         <SaveAll className="w-4 h-4" />
                         Guardar cambios
                     </Button>
@@ -118,10 +160,27 @@ export const ProductForm = ({ title, subTitle, product }: Props) => {
                                     </label>
                                     <input
                                         type="text"
-                                        {...register('title')}
-                                        className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                                        {...register('title', {
+                                            required: true,
+                                        })}
+                                        // value={product.title}
+                                        // onChange={(e) =>
+                                        //     handleInputChange(
+                                        //         'title',
+                                        //         e.target.value
+                                        //     )
+                                        // }
+                                        className={cn(
+                                            'w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200',
+                                            { 'border-red-500': errors.title }
+                                        )}
                                         placeholder="Título del producto"
                                     />
+                                    {errors.title && (
+                                        <p className="text-red-500 text-sm">
+                                            el titulo es requerido
+                                        </p>
+                                    )}
                                 </div>
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -131,13 +190,31 @@ export const ProductForm = ({ title, subTitle, product }: Props) => {
                                         </label>
                                         <input
                                             type="number"
-                                            value={product.price}
+                                            {...register('price', {
+                                                required: true,
+                                                min: 1,
+                                            })}
+                                            // value={product.price}
                                             // onChange={(e) =>
-                                            //   handleInputChange('price', parseFloat(e.target.value))
+                                            //     handleInputChange(
+                                            //         'price',
+                                            //         parseFloat(e.target.value)
+                                            //     )
                                             // }
-                                            className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                                            className={cn(
+                                                'w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200',
+                                                {
+                                                    'border-red-500':
+                                                        errors.price,
+                                                }
+                                            )}
                                             placeholder="Precio del producto"
                                         />
+                                        {errors.price && (
+                                            <p className="text-red-500 text-sm">
+                                                el precio debe ser mayor a 0
+                                            </p>
+                                        )}
                                     </div>
 
                                     <div>
@@ -146,13 +223,30 @@ export const ProductForm = ({ title, subTitle, product }: Props) => {
                                         </label>
                                         <input
                                             type="number"
-                                            // value={product.stock}
+                                            {...register('stock', {
+                                                required: true,
+                                                min: 1,
+                                            })}
                                             // onChange={(e) =>
-                                            //   handleInputChange('stock', parseInt(e.target.value))
+                                            //     handleInputChange(
+                                            //         'stock',
+                                            //         parseInt(e.target.value)
+                                            //     )
                                             // }
-                                            className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                                            className={cn(
+                                                'w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200',
+                                                {
+                                                    'border-red-500':
+                                                        errors.stock,
+                                                }
+                                            )}
                                             placeholder="Stock del producto"
                                         />
+                                        {errors.stock && (
+                                            <p className="text-red-500 text-sm">
+                                                el stock debe ser mayor a 0
+                                            </p>
+                                        )}
                                     </div>
                                 </div>
 
@@ -162,11 +256,36 @@ export const ProductForm = ({ title, subTitle, product }: Props) => {
                                     </label>
                                     <input
                                         type="text"
+                                        {...register('slug', {
+                                            required: true,
+                                            validate: (value) => {
+                                                return (
+                                                    !/\s/.test(value) ||
+                                                    'El slug no debe tener espacios en blanco'
+                                                )
+                                            },
+                                        })}
                                         // value={product.slug}
-                                        // onChange={(e) => handleInputChange('slug', e.target.value)}
-                                        className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                                        // onChange={(e) =>
+                                        //     handleInputChange(
+                                        //         'slug',
+                                        //         e.target.value
+                                        //     )
+                                        // }
+                                        className={cn(
+                                            'w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200',
+                                            {
+                                                'border-red-500': errors.slug,
+                                            }
+                                        )}
                                         placeholder="Slug del producto"
                                     />
+                                    {errors.slug && (
+                                        <p className="text-red-500 text-sm">
+                                            {errors.slug.message ||
+                                                'El Slug es requerido'}
+                                        </p>
+                                    )}
                                 </div>
 
                                 <div>
@@ -174,16 +293,20 @@ export const ProductForm = ({ title, subTitle, product }: Props) => {
                                         Género del producto
                                     </label>
                                     <select
+                                        {...register('gender')}
                                         // value={product.gender}
                                         // onChange={(e) =>
-                                        //   handleInputChange('gender', e.target.value)
+                                        //     handleInputChange(
+                                        //         'gender',
+                                        //         e.target.value
+                                        //     )
                                         // }
                                         className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
                                     >
                                         <option value="men">Hombre</option>
                                         <option value="women">Mujer</option>
                                         <option value="unisex">Unisex</option>
-                                        <option value="kids">Niño</option>
+                                        <option value="kid">Niño</option>
                                     </select>
                                 </div>
 
@@ -192,14 +315,31 @@ export const ProductForm = ({ title, subTitle, product }: Props) => {
                                         Descripción del producto
                                     </label>
                                     <textarea
+                                        {...register('description', {
+                                            required: true,
+                                        })}
                                         // value={product.description}
                                         // onChange={(e) =>
-                                        //   handleInputChange('description', e.target.value)
+                                        //     handleInputChange(
+                                        //         'description',
+                                        //         e.target.value
+                                        //     )
                                         // }
                                         rows={5}
-                                        className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 resize-none"
+                                        className={cn(
+                                            'w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 resize-none',
+                                            {
+                                                'border-red-500':
+                                                    errors.description,
+                                            }
+                                        )}
                                         placeholder="Descripción del producto"
                                     />
+                                    {errors.description && (
+                                        <p className="text-red-500 text-sm">
+                                            El Slug es requerido
+                                        </p>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -212,15 +352,15 @@ export const ProductForm = ({ title, subTitle, product }: Props) => {
 
                             <div className="space-y-4">
                                 <div className="flex flex-wrap gap-2">
-                                    {product.sizes.map((size) => (
+                                    {selectedSizes.map((size) => (
                                         <span
                                             key={size}
                                             className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800 border border-blue-200"
                                         >
                                             {size}
                                             <button
-                                                // onClick={() => removeSize(size)}
-                                                className="ml-2 text-blue-600 hover:text-blue-800 transition-colors duration-200"
+                                                onClick={() => removeSize(size)}
+                                                className=" cursor-pointer ml-2 text-blue-600 hover:text-blue-800 transition-colors duration-200"
                                             >
                                                 <X className="h-3 w-3" />
                                             </button>
@@ -235,13 +375,16 @@ export const ProductForm = ({ title, subTitle, product }: Props) => {
                                     {availableSizes.map((size) => (
                                         <button
                                             key={size}
-                                            // onClick={() => addSize(size)}
-                                            // disabled={product.sizes.includes(size)}
-                                            // className={`px-3 py-1 rounded-full text-sm font-medium transition-all duration-200 ${
-                                            //   product.sizes.includes(size)
-                                            //     ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                                            //     : 'bg-slate-200 text-slate-700 hover:bg-slate-300 cursor-pointer'
-                                            // }`}
+                                            type="button"
+                                            onClick={() => addSize(size)}
+                                            disabled={selectedSizes.includes(
+                                                size
+                                            )}
+                                            className={`px-3 py-1 rounded-full text-sm font-medium transition-all duration-200 ${
+                                                selectedSizes.includes(size)
+                                                    ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                                                    : 'bg-slate-200 text-slate-700 hover:bg-slate-300 cursor-pointer'
+                                            }`}
                                         >
                                             {size}
                                         </button>
@@ -258,7 +401,7 @@ export const ProductForm = ({ title, subTitle, product }: Props) => {
 
                             <div className="space-y-4">
                                 <div className="flex flex-wrap gap-2">
-                                    {product.tags.map((tag) => (
+                                    {activeTags.map((tag) => (
                                         <span
                                             key={tag}
                                             className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800 border border-green-200"
@@ -266,7 +409,7 @@ export const ProductForm = ({ title, subTitle, product }: Props) => {
                                             <Tag className="h-3 w-3 mr-1" />
                                             {tag}
                                             <button
-                                                // onClick={() => removeTag(tag)}
+                                                onClick={() => removeTag(tag)}
                                                 className="ml-2 text-green-600 hover:text-green-800 transition-colors duration-200"
                                             >
                                                 <X className="h-3 w-3" />
@@ -278,16 +421,26 @@ export const ProductForm = ({ title, subTitle, product }: Props) => {
                                 <div className="flex gap-2">
                                     <input
                                         type="text"
-                                        // value={newTag}
-                                        // onChange={(e) => setNewTag(e.target.value)}
-                                        // onKeyDown={(e) => e.key === 'Enter' && addTag()}
+                                        ref={inputRef}
+                                        onKeyDown={(e) => {
+                                            if (
+                                                e.key === 'Enter' ||
+                                                e.key === ' ' ||
+                                                e.key === ','
+                                            ) {
+                                                e.preventDefault()
+                                                addTag()
+                                            }
+                                        }}
                                         placeholder="Añadir nueva etiqueta..."
                                         className="flex-1 px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
                                     />
-                                    {/* TODO: */}
-                                    {/* <Button onClick={addTag} className="px-4 py-2rounded-lg ">
-                    <Plus className="h-4 w-4" />
-                  </Button> */}
+                                    <Button
+                                        onClick={addTag}
+                                        className="px-4 py-2rounded-lg "
+                                    >
+                                        <Plus className="h-4 w-4" />
+                                    </Button>
                                 </div>
                             </div>
                         </div>
@@ -364,6 +517,43 @@ export const ProductForm = ({ title, subTitle, product }: Props) => {
                                     ))}
                                 </div>
                             </div>
+
+                            {/* {Imagenes por cargar} */}
+                            <div className="mt-6 space-y-3">
+                                <h3 className="text-sm font-medium text-slate-700">
+                                    Imágenes por cargar
+                                </h3>
+                                <div className="grid grid-cols-2 gap-3">
+                                    {files.map((file, index) => (
+                                        <div
+                                            key={index}
+                                            className="relative group"
+                                        >
+                                            <div className="aspect-square bg-slate-100 rounded-lg border border-slate-200 flex items-center justify-center">
+                                                <img
+                                                    src={URL.createObjectURL(
+                                                        file
+                                                    )}
+                                                    alt="Product"
+                                                    className="w-full h-full object-cover rounded-lg"
+                                                />
+                                            </div>
+                                            <button className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                                                <X className="h-3 w-3" />
+                                            </button>
+                                            {/* <p className="mt-1 text-xs text-slate-600 truncate">
+                                                {image}
+                                            </p> */}
+                                        </div>
+                                    ))}
+
+                                    {files.length === 0 && (
+                                        <p className="text-red-500">
+                                            No hay archivos seleccionados
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
                         </div>
 
                         {/* Product Status */}
@@ -388,18 +578,19 @@ export const ProductForm = ({ title, subTitle, product }: Props) => {
                                     </span>
                                     <span
                                         className={`px-2 py-1 text-xs font-medium rounded-full ${
-                                            product.stock > 5
+                                            activeStock > 5
                                                 ? 'bg-green-100 text-green-800'
-                                                : product.stock > 0
-                                                ? 'bg-yellow-100 text-yellow-800'
-                                                : 'bg-red-100 text-red-800'
+                                                : activeStock > 0
+                                                  ? 'bg-yellow-100 text-yellow-800'
+                                                  : 'bg-red-100 text-red-800'
                                         }`}
                                     >
-                                        {product.stock > 5
+                                        ({activeStock})
+                                        {activeStock > 5
                                             ? 'En stock'
-                                            : product.stock > 0
-                                            ? 'Bajo stock'
-                                            : 'Sin stock'}
+                                            : activeStock > 0
+                                              ? 'Bajo stock'
+                                              : 'Sin stock'}
                                     </span>
                                 </div>
 
@@ -417,7 +608,7 @@ export const ProductForm = ({ title, subTitle, product }: Props) => {
                                         Tallas disponibles
                                     </span>
                                     <span className="text-sm text-slate-600">
-                                        {product.sizes.length} tallas
+                                        {selectedSizes.length} tallas
                                     </span>
                                 </div>
                             </div>
@@ -425,6 +616,6 @@ export const ProductForm = ({ title, subTitle, product }: Props) => {
                     </div>
                 </div>
             </div>
-        </>
+        </form>
     )
 }
